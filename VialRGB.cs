@@ -582,6 +582,8 @@ public static class VialRGB
                 idx++;
             }while (idx < numLeds && ledsToSend.Count < sendPerPacket && leds[idx].needUpdate);
             
+            idx--;
+            
             ByteMsg buffer = new ByteMsg();
             foreach (var led in ledsToSend)
             {
