@@ -35,33 +35,34 @@ internal static class StructPacker
         var valueCtr = 0;
         foreach (var ch in format)
         {
-            if (ch == '<')
+            switch (ch)
             {
-                littleEndian = true;
-            }
-            else if (ch == '>')
-            {
-                littleEndian = false;
-            }
-            else if (ch == 'x')
-            {
-                builder.AppendByte(0x00);
-            }
-            else
-            {
-                if (valueCtr >= values.Length)
-                    throw new InvalidOperationException("Provided too little values for given format string");
+                case '<':
+                    littleEndian = true;
+                    break;
+                case '>':
+                    littleEndian = false;
+                    break;
+                case 'x':
+                    builder.AppendByte(0x00);
+                    break;
+                default:
+                {
+                    if (valueCtr >= values.Length)
+                        throw new InvalidOperationException("Provided too little values for given format string");
 
-                var (formatType, _) = GetFormatType(ch);
-                var value = Convert.ChangeType(values[valueCtr], formatType);
-                var bytes = TypeAgnosticGetBytes(value);
-                var endianFlip = littleEndian != BitConverter.IsLittleEndian;
-                if (endianFlip)
-                    bytes = bytes.Reverse().ToArray();
+                    var (formatType, _) = GetFormatType(ch);
+                    var value = Convert.ChangeType(values[valueCtr], formatType);
+                    var bytes = TypeAgnosticGetBytes(value);
+                    var endianFlip = littleEndian != BitConverter.IsLittleEndian;
+                    if (endianFlip)
+                        bytes = bytes.Reverse().ToArray();
 
-                builder.AppendBytes(bytes);
+                    builder.AppendBytes(bytes);
 
-                valueCtr++;
+                    valueCtr++;
+                    break;
+                }
             }
         }
 
@@ -86,37 +87,38 @@ internal static class StructPacker
         var tupleType = typeof(T);
         foreach(var ch in format)
         {
-            if (ch == '<')
+            switch (ch)
             {
-                littleEndian = true;
-            }
-            else if (ch == '>')
-            {
-                littleEndian = false;
-            }
-            else if (ch == 'x')
-            {
-                dataIx++;
-            }
-            else
-            {
-                if (valueCtr >= tupleType.GenericTypeArguments.Length)
-                    throw new InvalidOperationException("Provided too little tuple arguments for given format string");
+                case '<':
+                    littleEndian = true;
+                    break;
+                case '>':
+                    littleEndian = false;
+                    break;
+                case 'x':
+                    dataIx++;
+                    break;
+                default:
+                {
+                    if (valueCtr >= tupleType.GenericTypeArguments.Length)
+                        throw new InvalidOperationException("Provided too little tuple arguments for given format string");
 
-                var (formatType, formatSize) = GetFormatType(ch);
+                    var (formatType, formatSize) = GetFormatType(ch);
 
-                var valueBytes = data[dataIx..(dataIx + formatSize)];
-                var endianFlip = littleEndian != BitConverter.IsLittleEndian;
-                if (endianFlip)
-                    valueBytes = valueBytes.Reverse().ToArray();
+                    var valueBytes = data[dataIx..(dataIx + formatSize)];
+                    var endianFlip = littleEndian != BitConverter.IsLittleEndian;
+                    if (endianFlip)
+                        valueBytes = valueBytes.Reverse().ToArray();
 
-                var value = TypeAgnosticGetValue(formatType, valueBytes);
+                    var value = TypeAgnosticGetValue(formatType, valueBytes);
 
-                var genericType = tupleType.GenericTypeArguments[valueCtr];
-                resultingValues.Add(genericType == typeof(bool) ? value : Convert.ChangeType(value, genericType));
+                    var genericType = tupleType.GenericTypeArguments[valueCtr];
+                    resultingValues.Add(genericType == typeof(bool) ? value : Convert.ChangeType(value, genericType));
 
-                valueCtr++;
-                dataIx += formatSize;
+                    valueCtr++;
+                    dataIx += formatSize;
+                    break;
+                }
             }
         }
 
@@ -172,15 +174,28 @@ internal static class StructPacker
     // This means we can have much cleaner code below.
     private static byte[] TypeAgnosticGetBytes(object o)
     {
-        if (o is bool b) return b ? [0x01] : [0x00];
-        if (o is int x) return BitConverter.GetBytes(x);
-        if (o is uint x2) return BitConverter.GetBytes(x2);
-        if (o is long x3) return BitConverter.GetBytes(x3);
-        if (o is ulong x4) return BitConverter.GetBytes(x4);
-        if (o is short x5) return BitConverter.GetBytes(x5);
-        if (o is ushort x6) return BitConverter.GetBytes(x6);
-        if (o is byte || o is sbyte) return [(byte)o];
-        throw new ArgumentException("Unsupported object type found");
+        switch (o)
+        {
+            case bool b:
+                return b ? [0x01] : [0x00];
+            case int x:
+                return BitConverter.GetBytes(x);
+            case uint x2:
+                return BitConverter.GetBytes(x2);
+            case long x3:
+                return BitConverter.GetBytes(x3);
+            case ulong x4:
+                return BitConverter.GetBytes(x4);
+            case short x5:
+                return BitConverter.GetBytes(x5);
+            case ushort x6:
+                return BitConverter.GetBytes(x6);
+            case byte:
+            case sbyte:
+                return [(byte)o];
+            default:
+                throw new ArgumentException("Unsupported object type found");
+        }
     }
 
     private static object TypeAgnosticGetValue(Type type, byte[] data)

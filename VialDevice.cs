@@ -4,14 +4,16 @@ namespace SharpVialRGB;
 
 public class VialDevice
 {
-    private DeviceInfo _deviceInfo;
+    private readonly DeviceInfo _deviceInfo;
     private Device _device;
     private byte _originalMode;
     private VialRgbLed[] _leds;
-    private VialRgbLed[,] _ledsMatrix;
-    private VialRgbLed[,] _ledsMatrixColRow;
-    private Dictionary<QmkKeycode, VialRgbLed> _ledsByKeycode;
-
+    private VialRgbLed[,]? _ledsMatrix;
+    private VialRgbLed[,]? _ledsMatrixColRow;
+    private Dictionary<QmkKeycode, VialRgbLed>? _ledsByKeycode;
+    
+    public bool Connected { get; private set; }
+    
     public int SizeX { get; private set; }
     public int SizeY { get; private set; }
     public int Columns { get; private set; }
@@ -31,9 +33,16 @@ public class VialDevice
 
     public void Connect()
     {
-        _device = _deviceInfo.ConnectToDevice();
-        _leds = VialRGB.VialRgbGetLeds(_device);
-        _originalMode = VialRGB.VialRgbGetMode(_device);
+        try
+        {
+            _device = _deviceInfo.ConnectToDevice();
+            _leds = VialRGB.VialRgbGetLeds(_device);
+            _originalMode = VialRGB.VialRgbGetMode(_device);
+        }
+        catch (Exception)
+        {
+            return;
+        }
 
         SizeX = 0;
         SizeY = 0;
@@ -67,6 +76,8 @@ public class VialDevice
             _ledsMatrixColRow[led.Col, led.Row] = led;
             _ledsByKeycode.Add(led.keycode,led);
         }
+
+        Connected = true;
     }
 
     public void Dispose()
@@ -74,6 +85,7 @@ public class VialDevice
         VialRGB.VialRgbSetMode(_device, _originalMode);
         
         _device.Dispose();
+        Connected = false;
     }
 
     public void EnableDirectRgb()
@@ -89,23 +101,23 @@ public class VialDevice
             VialRGB.VialRgbSendLeds(_device, _leds);
     }
 
-    public VialRgbLed GetLedAtCoords(byte x, byte y)
+    public VialRgbLed? GetLedAtCoords(byte x, byte y)
     {
-        return _ledsMatrix[x, y];
+        return _ledsMatrix?[x, y];
     }
 
-    public VialRgbLed GetLedByKeycode(QmkKeycode key)
+    public VialRgbLed? GetLedByKeycode(QmkKeycode key)
     {
-        return _ledsByKeycode.GetValueOrDefault(key);
+        return _ledsByKeycode?.GetValueOrDefault(key);
     }
     
-    public VialRgbLed GetLedByKeycode(StandardKeycode key)
+    public VialRgbLed? GetLedByKeycode(StandardKeycode key)
     {
-        return _ledsByKeycode.GetValueOrDefault(KeycodeUtils.GetQmkFromStandard(key));
+        return _ledsByKeycode?.GetValueOrDefault(KeycodeUtils.GetQmkFromStandard(key));
     }
 
-    public VialRgbLed GetLedByColumnRow(byte col, byte row)
+    public VialRgbLed? GetLedByColumnRow(byte col, byte row)
     {
-        return _ledsMatrixColRow[row, col];
+        return _ledsMatrixColRow?[row, col];
     }
 }

@@ -45,43 +45,21 @@ public class VialRgbLed()
         return $"VialRGBLed(idx={idx}, x={x}, y={y}, flags={flags}, row={row}, col={col})";
     }
 
-    public uint Id
-    {
-        get => idx;
-    }
+    public uint Id => idx;
+    public byte X => x;
+    public byte Y => y;
+    public byte Row => row;
+    public byte Col => col;
 
-    public byte X
-    {
-        get => x;
-    }
-
-    public byte Y
-    {
-        get => y;
-    }
-
-    public byte Row
-    {
-        get => row;
-    }
-
-    public byte Col
-    {
-        get => col;
-    }
-
-    public QmkKeycode Keycode
-    {
-        get => keycode;
-    }
+    public QmkKeycode Keycode => keycode;
 
     public byte Hue
     {
         get => h;
         set
         {
+            needUpdate |= h != value;
             h = value;
-            needUpdate = true;
         }
     }
 
@@ -90,8 +68,8 @@ public class VialRgbLed()
         get => s;
         set
         {
+            needUpdate |= s != value;
             s = value;
-            needUpdate = true;
         }
     }
 
@@ -100,15 +78,15 @@ public class VialRgbLed()
         get => v;
         set
         {
+            needUpdate |= v != value;
             v = value;
-            needUpdate = true;
         }
     }
 }
 
 public static class VialRGB
 {
-    public struct ByteMsg : IEnumerable<byte>
+    public struct ByteMsg : IEnumerable<byte>, IEquatable<ByteMsg>
     {
         private List<byte> _bytes;
 
@@ -170,6 +148,21 @@ public static class VialRGB
             bytes.AddRange(b._bytes);
 
             return new ByteMsg(bytes);
+        }
+        
+        public bool Equals(ByteMsg other)
+        {
+            return _bytes.Equals(other._bytes);
+        }
+
+        public override bool Equals(object? obj)
+        {
+            return obj is ByteMsg other && Equals(other);
+        }
+
+        public override int GetHashCode()
+        {
+            return _bytes.GetHashCode();
         }
 
         public static bool operator ==(ByteMsg a, ByteMsg b)
@@ -304,33 +297,8 @@ public static class VialRGB
 
         return StructPacker.UnpackSingle<ushort>(">H", buffer);
     }
-    
-    private static byte[] TypeAgnosticGetBytes(object o)
-    {
-        if (o is bool b) return b ? [0x01] : [0x00];
-        if (o is int x) return BitConverter.GetBytes(x);
-        if (o is uint x2) return BitConverter.GetBytes(x2);
-        if (o is long x3) return BitConverter.GetBytes(x3);
-        if (o is ulong x4) return BitConverter.GetBytes(x4);
-        if (o is short x5) return BitConverter.GetBytes(x5);
-        if (o is ushort x6) return BitConverter.GetBytes(x6);
-        if (o is byte || o is sbyte) return [(byte)o];
-        throw new ArgumentException("Unsupported object type found");
-    }
 
-    private static ByteMsg CombineToBytes(params object[] values)
-    {
-        ByteMsg bytes = new ByteMsg();
-
-        foreach (var value in values)
-        {
-            bytes.Add(TypeAgnosticGetBytes(value));
-        }
-        
-        return bytes;
-    }
-
-    internal static ByteMsg HidSend(Device dev, ByteMsg msg, uint retries = 1)
+    private static ByteMsg HidSend(Device dev, ByteMsg msg, uint retries = 1, bool waitForResponce = true)
     {
         if (msg.Length > VialConstants.MSG_LEN)
             throw new ApplicationException("message must be less than 32 bytes");
@@ -356,9 +324,12 @@ public static class VialRGB
             {
                 dev.Write(msg);
 
-                int readBytes = dev.Read(data);
-                if (readBytes == 0)
-                    continue;
+                if (waitForResponce)
+                {
+                    int readBytes = dev.Read(data);
+                    if (readBytes == 0)
+                        continue;
+                }
             }
             catch (Exception)
             {
@@ -373,7 +344,7 @@ public static class VialRGB
         return data;
     }
 
-    internal static bool IsRawHid(DeviceInfo desc)
+    private static bool IsRawHid(DeviceInfo desc)
     {
         if (desc.UsagePage != 0xFF60 || desc.Usage != 0x61)
             return false;
@@ -407,7 +378,7 @@ public static class VialRGB
         return true;
     }
 
-    internal static bool IsVialRgb(DeviceInfo desc)
+    private static bool IsVialRgb(DeviceInfo desc)
     {
         Device dev;
 
@@ -443,7 +414,7 @@ public static class VialRGB
         return true;
     }
 
-    internal static DeviceInfo[] FindVialDevices()
+    private static DeviceInfo[] FindVialDevices()
     {
         var devices = Hid.Enumerate();
 
@@ -463,7 +434,7 @@ public static class VialRGB
         return foundDevices.ToArray();
     }
 
-    internal static ushort[] VialRgbGetModes(Device dev)
+    private static ushort[] VialRgbGetModes(Device dev)
     {
         var data = HidSend(dev, new[] { VialConstants.CMD_VIA_LIGHTING_GET_VALUE, VialConstants.VIALRGB_GET_INFO }, 20)
             .GetOffseted(2);
@@ -562,7 +533,6 @@ public static class VialRGB
         }
 
         ushort numLeds = (ushort)leds.Length;
-        ushort sent = 0;
 
         for (ushort idx = 0; idx < numLeds; ++idx)
         {
@@ -596,7 +566,7 @@ public static class VialRGB
             foreach (var x in buffer)
                 payload.Add(StructPacker.Pack("<B", x));
 
-            HidSend(dev, payload);
+            HidSend(dev, payload, waitForResponce:false);
         }
     }
 
@@ -637,7 +607,7 @@ public static class VialRGB
             foreach (var x in buffer)
                 payload.Add(StructPacker.Pack("<B", x));
 
-            HidSend(dev, payload);
+            HidSend(dev, payload, waitForResponce:false);
 
             sent += (ushort)ledsToSend.Count;
         }
